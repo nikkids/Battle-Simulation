@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Customizable Image Battle Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Roboto Mono', monospace;
+        background-color: #111827;
+        color: #f3f4f6;
+      }
+      canvas {
+        background-color: #1f2937;
+        border: 2px solid #4b5563;
+        border-radius: 0.5rem;
+        cursor: default;
+      }
+      .stat-display {
+        background-color: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+        transition: border-color 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .ability-active {
+        border-color: #facc15; /* yellow-400 */
+      }
+      .ability-icon-container {
+        position: relative;
+        width: 50px;
+        height: 50px;
+        border-radius: 0.375rem;
+        overflow: hidden;
+        border: 2px solid #4b5563;
+      }
+      .ability-cooldown-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        transition: height 0.1s linear;
+      }
+      .sim-button {
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+      }
+      .sim-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 10px rgba(0, 0, 0, 0.5);
+      }
+      .sim-button:active {
+        transform: translateY(0);
+      }
+      .sim-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #winner-overlay {
+        background-color: rgba(17, 24, 39, 0.9);
+        transition: opacity 0.5s ease;
+      }
+      .upload-label {
+        background-color: #374151;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .upload-label:hover {
+        background-color: #4b5563;
+      }
+      input[type='file'] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body class="flex flex-col items-center justify-center min-h-screen p-4">
+    <h1 class="text-4xl font-bold text-white mb-2">Ecosystem Battle</h1>
+    <p class="text-gray-400 mb-20"></p>
+
+    <div class="w-full max-w-4xl">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div id="guardian-stat-box" class="stat-display">
+          <div class="ability-icon-container">
+            <img
+              id="guardian-ability-img"
+              src=""
+              class="w-full h-full object-cover"
+            />
+            <div
+              id="guardian-ability-cd"
+              class="ability-cooldown-overlay"
+            ></div>
+          </div>
+          <div class="text-left">
+            <h2 class="text-xl font-bold text-cyan-400">Blue</h2>
+            <p
+              id="guardian-stats"
+              class="text-sm text-gray-300 whitespace-nowrap"
+            ></p>
+            <p class="text-xs text-gray-400 mt-1 whitespace-normal">
+              <strong>Ability: Holy Bastion</strong> - Creates a shield that
+              blocks damage for 3s. (8s CD)
+            </p>
+          </div>
+        </div>
+        <div id="striker-stat-box" class="stat-display">
+          <div class="ability-icon-container">
+            <img
+              id="striker-ability-img"
+              src=""
+              class="w-full h-full object-cover"
+            />
+            <div id="striker-ability-cd" class="ability-cooldown-overlay"></div>
+          </div>
+          <div class="text-left">
+            <h2 class="text-xl font-bold text-red-400">Red</h2>
+            <p
+              id="striker-stats"
+              class="text-sm text-gray-300 whitespace-nowrap"
+            ></p>
+            <p class="text-xs text-gray-400 mt-1 whitespace-normal">
+              <strong>Ability: Blessing of Aeons</strong> - Heals 25 health and
+              +5 damage over 5 seconds. (12s CD)
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative flex justify-center">
+        <canvas id="simulationCanvas"></canvas>
+        <div
+          id="winner-overlay"
+          class="absolute inset-0 flex flex-col items-center justify-center hidden opacity-0"
+        >
+          <h2 id="winner-text" class="text-5xl font-bold"></h2>
+          <p class="text-gray-300 mt-2">The simulation has ended.</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center mt-20">
+        <button
+          id="start-reset-btn"
+          class="sim-button bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg"
+        >
+          Loading...
+        </button>
+      </div>
+
+      <div class="mt-6 p-4 rounded-lg bg-gray-800 border border-gray-700">
+        <h3 class="text-lg font-bold text-center mb-4">Britania</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+          <div>
+            <h4 class="font-bold mb-2">Guardian (Creature 1)</h4>
+            <label class="upload-label" for="g-body-upload">Body</label>
+            <input type="file" id="g-body-upload" accept="image/*" />
+            <label class="upload-label mt-2" for="g-weapon-upload"
+              >Weapon</label
+            >
+            <input type="file" id="g-weapon-upload" accept="image/*" />
+            <label class="upload-label mt-2" for="g-ability-upload"
+              >Ability Icon</label
+            >
+            <input type="file" id="g-ability-upload" accept="image/*" />
+          </div>
+          <div>
+            <h4 class="font-bold mb-2">Striker (Creature 2)</h4>
+            <label class="upload-label" for="s-body-upload">Body</label>
+            <input type="file" id="s-body-upload" accept="image/*" />
+            <label class="upload-label mt-2" for="s-weapon-upload"
+              >Weapon</label
+            >
+            <input type="file" id="s-weapon-upload" accept="image/*" />
+            <label class="upload-label mt-2" for="s-ability-upload"
+              >Ability Icon</label
+            >
+            <input type="file" id="s-ability-upload" accept="image/*" />
+          </div>
+          <div>
+            <h4 class="font-bold mb-2">Arena</h4>
+            <label class="upload-label" for="bg-upload">Background</label>
+            <input type="file" id="bg-upload" accept="image/*" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById('simulationCanvas');
+      const ctx = canvas.getContext('2d');
+
+      // UI Elements
+      const guardianStatsEl = document.getElementById('guardian-stats');
+      const strikerStatsEl = document.getElementById('striker-stats');
+      const guardianStatBox = document.getElementById('guardian-stat-box');
+      const strikerStatBox = document.getElementById('striker-stat-box');
+      const guardianAbilityCD = document.getElementById('guardian-ability-cd');
+      const strikerAbilityCD = document.getElementById('striker-ability-cd');
+      const startResetBtn = document.getElementById('start-reset-btn');
+      const winnerOverlay = document.getElementById('winner-overlay');
+      const winnerText = document.getElementById('winner-text');
+
+      // Image Upload Inputs
+      const gBodyUpload = document.getElementById('g-body-upload');
+      const gWeaponUpload = document.getElementById('g-weapon-upload');
+      const gAbilityUpload = document.getElementById('g-ability-upload');
+      const sBodyUpload = document.getElementById('s-body-upload');
+      const sWeaponUpload = document.getElementById('s-weapon-upload');
+      const sAbilityUpload = document.getElementById('s-ability-upload');
+      const bgUpload = document.getElementById('bg-upload');
+
+      let creatures = [];
+      let particles = [];
+      let animationFrameId;
+      let isRunning = false;
+
+      // Image Objects
+      let guardianBodyImg = new Image();
+      let guardianWeaponImg = new Image();
+      let guardianAbilityImg = document.getElementById('guardian-ability-img');
+      let strikerBodyImg = new Image();
+      let strikerWeaponImg = new Image();
+      let strikerAbilityImg = document.getElementById('striker-ability-img');
+      let backgroundImg = new Image();
+
+      // --- Image Loading ---
+      const defaultImages = {
+        gBody: 'asset/simple_blue.png',
+        gWeapon: 'asset/weapon/forcefield_dagger.png',
+        gAbility: 'asset/logo/forcefield_logo.png', // Re-used for Force Field
+        sBody: 'asset/simple_red.png',
+        sWeapon: 'asset/weapon/heal_dagger.png',
+        sAbility: 'asset/logo/heal_logo.png', // Re-used for Regen
+        bg: 'asset/background.png',
+      };
+
+      const hit = new Audio('asset/hit.mp3');
+      const bounce = new Audio('asset/friction.mp3');
+      const shieldUp = new Audio('asset/forcefield.mp3'); // Re-using sound
+      const healSound = new Audio('asset/heal.mp3'); // Re-using sound
+      shieldUp.volume = 0.6;
+      healSound.volume = 0.2;
+      hit.volume = 1;
+      bounce.volume = 1;
+
+      function loadImage(src, imageObject) {
+        return new Promise((resolve, reject) => {
+          imageObject.onload = () => resolve(imageObject);
+          imageObject.onerror = reject;
+          imageObject.src = src;
+        });
+      }
+
+      function handleFileUpload(event, imageObject) {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            imageObject.src = e.target.result;
+            if (!isRunning) redrawStatic();
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      gBodyUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, guardianBodyImg)
+      );
+      gWeaponUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, guardianWeaponImg)
+      );
+      gAbilityUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, guardianAbilityImg)
+      );
+      sBodyUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, strikerBodyImg)
+      );
+      sWeaponUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, strikerWeaponImg)
+      );
+      sAbilityUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, strikerAbilityImg)
+      );
+      bgUpload.addEventListener('change', (e) =>
+        handleFileUpload(e, backgroundImg)
+      );
+
+      // --- Creature Class ---
+      class Creature {
+        constructor(
+          x,
+          y,
+          radius,
+          color,
+          name,
+          maxHealth,
+          speed,
+          damage,
+          weapon,
+          images,
+          ability
+        ) {
+          this.x = x;
+          this.y = y;
+          this.vx = (Math.random() - 0.5) * speed;
+          this.vy = (Math.random() - 0.5) * speed;
+          this.radius = radius;
+          this.color = color;
+          this.name = name;
+          this.maxHealth = maxHealth;
+          this.health = maxHealth;
+          this.speed = speed;
+          this.damage = damage;
+          this.mass = Math.PI * radius * radius;
+          this.weapon = { ...weapon, image: images.weapon };
+          this.bodyImage = images.body;
+          this.ability = { ...ability, lastUsed: 0, isActive: false };
+          this.lastHitTime = 0;
+        }
+
+        draw() {
+          ctx.save();
+
+          // Draw Force Field
+          if (this.ability.isActive && this.ability.type === 'forceField') {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(34, 211, 238, 0.4)'; // Light blue shield
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(165, 243, 252, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+
+          // Draw weapon
+          ctx.translate(this.x, this.y);
+          ctx.rotate(this.weapon.angle);
+          ctx.drawImage(
+            this.weapon.image,
+            0,
+            -this.weapon.width / 2,
+            this.weapon.length,
+            this.weapon.width
+          );
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+          // Draw the creature image
+          ctx.drawImage(
+            this.bodyImage,
+            this.x - this.radius,
+            this.y - this.radius,
+            this.radius * 2,
+            this.radius * 2
+          );
+
+          ctx.restore();
+
+          // Draw health bar
+          const barWidth = this.radius * 1.5;
+          const barHeight = 7;
+          const barY = this.y - this.radius - 15;
+          ctx.fillStyle = 'white';
+          ctx.font = '10px Roboto Mono';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            `${Math.ceil(this.health)}/${this.maxHealth}`,
+            this.x,
+            barY - 2
+          );
+          ctx.fillStyle = '#4b5563';
+          ctx.fillRect(this.x - barWidth / 2, barY, barWidth, barHeight);
+          ctx.fillStyle = this.color;
+          ctx.fillRect(
+            this.x - barWidth / 2,
+            barY,
+            (this.health / this.maxHealth) * barWidth,
+            barHeight
+          );
+        }
+
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+          this.weapon.angle += this.weapon.rotationSpeed;
+
+          // --- HORIZONTAL COLLISION (X-AXIS) ---
+          if (
+            (this.x - this.radius < 0 && this.vx < 0) ||
+            (this.x + this.radius > canvas.width && this.vx > 0)
+          ) {
+            // This condition now checks for position AND direction.
+            // It will only be true on the first frame of impact.
+            bounce.currentTime = 0;
+            bounce.play();
+            this.vx *= -1;
+          }
+
+          // --- VERTICAL COLLISION (Y-AXIS) ---
+          if (
+            (this.y - this.radius < 0 && this.vy < 0) ||
+            (this.y + this.radius > canvas.height && this.vy > 0)
+          ) {
+            // Same logic for the top and bottom walls.
+            bounce.currentTime = 0;
+            bounce.play();
+            this.vy *= -1;
+          }
+
+          // Position clamping is kept separate to always prevent the ball from leaving the screen.
+          this.x = Math.max(
+            this.radius,
+            Math.min(this.x, canvas.width - this.radius)
+          );
+          this.y = Math.max(
+            this.radius,
+            Math.min(this.y, canvas.height - this.radius)
+          );
+        }
+
+        takeDamage(amount, hitX, hitY) {
+          // The original line is kept. It correctly calculates the new health.
+          this.health = Math.max(0, this.health - amount);
+          createHitParticles(hitX, hitY, this.color);
+
+          // --- FIX: Add this block ---
+          // If the damage just taken was fatal, we must immediately
+          // deactivate the regeneration ability to prevent it from
+          // incorrectly healing a "dead" creature.
+          if (this.health <= 0) {
+            if (this.ability.isActive && this.ability.type === 'regeneration') {
+              this.ability.isActive = false;
+            }
+          }
+        }
+      }
+
+      // --- Particle Class ---
+      class Particle {
+        constructor(x, y, rgbColor, size = 3, speed = 4, life = 50) {
+          this.x = x;
+          this.y = y;
+          this.vx = (Math.random() - 0.5) * speed;
+          this.vy = (Math.random() - 0.5) * speed;
+          this.radius = Math.random() * size + 1;
+          this.color = rgbColor;
+          this.life = life;
+          this.initialLife = life;
+        }
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = this.color
+            .replace(')', `, ${this.life / this.initialLife})`)
+            .replace('rgb', 'rgba');
+          ctx.fill();
+          ctx.closePath();
+        }
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+          this.life--;
+        }
+      }
+
+      function handleAbilities(now) {
+        creatures.forEach((creature) => {
+          if (creature.health <= 0) return;
+
+          // --- Ability Activation ---
+          if (
+            !creature.ability.isActive &&
+            now - creature.ability.lastUsed > creature.ability.cooldown
+          ) {
+            creature.ability.isActive = true;
+            creature.ability.lastUsed = now;
+
+            if (creature.ability.type === 'forceField') {
+              shieldUp.currentTime = 0;
+              shieldUp.play();
+            }
+            if (creature.ability.type === 'regeneration') {
+              creature.ability.ticks = 0;
+              healSound.currentTime = 0;
+              healSound.play();
+              // Save the original damage and apply the buff
+              creature.originalDamage = creature.damage;
+              creature.damage = 20;
+            }
+          }
+
+          // --- Active Ability Logic & Deactivation ---
+          if (creature.ability.isActive) {
+            // First, check if the ability should be deactivated
+            if (now - creature.ability.lastUsed > creature.ability.duration) {
+              creature.ability.isActive = false;
+
+              // Only restore damage if the ability was regeneration
+              if (creature.ability.type === 'regeneration') {
+                creature.damage = creature.originalDamage;
+              }
+              // Stop further processing for this creature this frame
+              return;
+            }
+
+            // If still active, apply ongoing effects
+            if (creature.ability.type === 'regeneration') {
+              // Heal on intervals
+              const tickTime =
+                creature.ability.duration / creature.ability.totalTicks;
+              const currentTick = Math.floor(
+                (now - creature.ability.lastUsed) / tickTime
+              );
+              if (currentTick > creature.ability.ticks) {
+                creature.health = Math.min(
+                  creature.maxHealth,
+                  creature.health + creature.ability.healPerTick
+                );
+                createRegenParticles(creature.x, creature.y);
+                creature.ability.ticks = currentTick;
+              }
+            }
+          }
+        });
+      }
+
+      function handlePhysicsCollisions() {
+        const [c1, c2] = creatures;
+        const dx = c2.x - c1.x;
+        const dy = c2.y - c1.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < c1.radius + c2.radius) {
+          bounce.currentTime = 0;
+          bounce.play();
+          const normalX = dx / distance;
+          const normalY = dy / distance;
+          const p =
+            (2 *
+              (c1.vx * normalX +
+                c1.vy * normalY -
+                c2.vx * normalX -
+                c2.vy * normalY)) /
+            (c1.mass + c2.mass);
+          c1.vx -= p * c2.mass * normalX;
+          c1.vy -= p * c2.mass * normalY;
+          c2.vx += p * c1.mass * normalX;
+          c2.vy += p * c1.mass * normalY;
+          const overlap = c1.radius + c2.radius - distance;
+          c1.x -= overlap * normalX * (c2.mass / (c1.mass + c2.mass));
+          c1.y -= overlap * normalY * (c2.mass / (c1.mass + c2.mass));
+          c2.x += overlap * normalX * (c1.mass / (c1.mass + c2.mass));
+          c2.y += overlap * normalY * (c1.mass / (c1.mass + c2.mass));
+        }
+      }
+
+      function handleWeaponHits() {
+        const now = Date.now();
+        checkLineCircleCollision(creatures[0], creatures[1], now);
+        checkLineCircleCollision(creatures[1], creatures[0], now);
+      }
+
+      function checkLineCircleCollision(attacker, defender, now) {
+        // NEW: Check for active Force Field
+        if (
+          defender.ability.isActive &&
+          defender.ability.type === 'forceField'
+        ) {
+          // Optional: Add a visual spark effect for the block here
+          return; // Block the attack
+        }
+
+        if (now - defender.lastHitTime < 200) return;
+
+        const weaponStartX = attacker.x;
+        const weaponStartY = attacker.y;
+        const weaponEndX =
+          attacker.x + Math.cos(attacker.weapon.angle) * attacker.weapon.length;
+        const weaponEndY =
+          attacker.y + Math.sin(attacker.weapon.angle) * attacker.weapon.length;
+
+        const dx = weaponEndX - weaponStartX;
+        const dy = weaponEndY - weaponStartY;
+        const a = dx * dx + dy * dy;
+        const b =
+          2 *
+          (dx * (weaponStartX - defender.x) + dy * (weaponStartY - defender.y));
+        const c =
+          (weaponStartX - defender.x) ** 2 +
+          (weaponStartY - defender.y) ** 2 -
+          defender.radius ** 2;
+
+        const discriminant = b * b - 4 * a * c;
+        if (discriminant >= 0) {
+          const t1 = (-b - Math.sqrt(discriminant)) / (2 * a);
+          const t2 = (-b + Math.sqrt(discriminant)) / (2 * a);
+          if ((t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1)) {
+            const hitT = t1 >= 0 && t1 <= 1 ? t1 : t2;
+            const hitX = weaponStartX + hitT * dx;
+            const hitY = weaponStartY + hitT * dy;
+            hit.currentTime = 0;
+            hit.play();
+            defender.takeDamage(attacker.damage, hitX, hitY);
+            defender.lastHitTime = now;
+          }
+        }
+      }
+
+      function createHitParticles(x, y, color) {
+        const rgbColor = (ctx.fillStyle = color);
+        for (let i = 0; i < 15; i++) {
+          particles.push(new Particle(x, y, rgbColor));
+        }
+      }
+
+      // NEW function for regeneration effect
+      function createRegenParticles(x, y) {
+        for (let i = 0; i < 2; i++) {
+          particles.push(
+            new Particle(
+              x + (Math.random() - 0.5) * 20,
+              y + (Math.random() - 0.5) * 20,
+              'rgb(74, 222, 128)', // green-400
+              3, // size
+              -1.5, // speed (moves up)
+              40 // life
+            )
+          );
+        }
+      }
+
+      function updateUI(now) {
+        const [c1, c2] = creatures;
+        guardianStatsEl.innerHTML = `DMG: ${c1.damage} | SPD: ${
+          c1.speed
+        } | ATK SPD: ${(c1.weapon.rotationSpeed * 100).toFixed(1)}`;
+        strikerStatsEl.innerHTML = `DMG: ${c2.damage} | SPD: ${
+          c2.speed
+        } | ATK SPD: ${(c2.weapon.rotationSpeed * 100).toFixed(1)}`;
+
+        c1.ability.isActive
+          ? guardianStatBox.classList.add('ability-active')
+          : guardianStatBox.classList.remove('ability-active');
+        c2.ability.isActive
+          ? strikerStatBox.classList.add('ability-active')
+          : strikerStatBox.classList.remove('ability-active');
+
+        // Update Cooldown overlays
+        const gCooldownProgress = Math.min(
+          1,
+          (now - c1.ability.lastUsed) / c1.ability.cooldown
+        );
+        guardianAbilityCD.style.height = `${(1 - gCooldownProgress) * 100}%`;
+
+        const sCooldownProgress = Math.min(
+          1,
+          (now - c2.ability.lastUsed) / c2.ability.cooldown
+        );
+        strikerAbilityCD.style.height = `${(1 - sCooldownProgress) * 100}%`;
+      }
+
+      function checkWinner() {
+        const [c1, c2] = creatures;
+        if (c1.health <= 0 || c2.health <= 0) {
+          isRunning = false;
+          cancelAnimationFrame(animationFrameId);
+          const winner = c1.health > 0 ? c1 : c2;
+          winnerText.textContent = `${winner.name} Wins!`;
+          winnerText.style.color = winner.color;
+          winnerOverlay.classList.remove('hidden');
+          setTimeout(() => (winnerOverlay.style.opacity = 1), 10);
+          startResetBtn.textContent = 'Reset Simulation';
+        }
+      }
+
+      function redrawStatic() {
+        if (isRunning) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+        creatures.forEach((c) => c.draw());
+      }
+
+      function gameLoop() {
+        if (!isRunning) return;
+        const now = Date.now();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+
+        handleAbilities(now); // Handle abilities first
+
+        particles.forEach((p, index) => {
+          p.update();
+          p.draw();
+          if (p.life <= 0) particles.splice(index, 1);
+        });
+        creatures.forEach((creature) => {
+          creature.update();
+          creature.draw();
+        });
+        handlePhysicsCollisions();
+        handleWeaponHits();
+        updateUI(now);
+        checkWinner();
+        animationFrameId = requestAnimationFrame(gameLoop);
+      }
+
+      function setupCanvas() {
+        const container = canvas.parentElement;
+        const size = Math.min(container.clientWidth, 500);
+        canvas.width = size;
+        canvas.height = size;
+      }
+
+      async function init() {
+        startResetBtn.disabled = true;
+        startResetBtn.textContent = 'Loading...';
+        setupCanvas();
+        winnerOverlay.classList.add('hidden');
+        winnerOverlay.style.opacity = 0;
+
+        guardianAbilityImg.src = defaultImages.gAbility;
+        strikerAbilityImg.src = defaultImages.sAbility;
+
+        await Promise.all([
+          loadImage(defaultImages.gBody, guardianBodyImg),
+          loadImage(defaultImages.gWeapon, guardianWeaponImg),
+          loadImage(defaultImages.sBody, strikerBodyImg),
+          loadImage(defaultImages.sWeapon, strikerWeaponImg),
+          loadImage(defaultImages.bg, backgroundImg),
+        ]);
+
+        creatures = [
+          // Guardian with FORCE FIELD ability
+          new Creature(
+            canvas.width * 0.25,
+            canvas.height / 2,
+            30, // Slightly larger
+            '#22d3ee',
+            'Blue',
+            220, // More health
+            25,
+            20,
+            { angle: 270, length: 65, rotationSpeed: 0.05, width: 50 },
+            { body: guardianBodyImg, weapon: guardianWeaponImg },
+            {
+              type: 'forceField',
+              cooldown: 8000,
+              duration: 3000, // 3 seconds of invulnerability
+            }
+          ),
+          // Striker with REGENERATION ability
+          new Creature(
+            canvas.width * 0.75,
+            canvas.height / 2,
+            25,
+            '#f87171',
+            'Red',
+            180,
+            25,
+            15,
+            { angle: 50, length: 65, rotationSpeed: 0.06, width: 60 },
+            { body: strikerBodyImg, weapon: strikerWeaponImg },
+            {
+              type: 'regeneration',
+              cooldown: 12000,
+              duration: 5000, // Heals over 5 seconds
+              healPerTick: 5, // Amount to heal each time
+              totalTicks: 5, // How many times it heals in the duration
+            }
+          ),
+        ];
+
+        particles = [];
+        updateUI(Date.now());
+        redrawStatic();
+        startResetBtn.disabled = false;
+        startResetBtn.textContent = 'Start Simulation';
+      }
+
+      startResetBtn.addEventListener('click', () => {
+        if (isRunning || startResetBtn.disabled) return;
+        if (startResetBtn.textContent.includes('Reset')) {
+          init();
+          return;
+        }
+        const now = Date.now();
+        creatures.forEach((c) => (c.ability.lastUsed = now));
+        isRunning = true;
+        startResetBtn.textContent = 'Running...';
+        gameLoop();
+      });
+
+      window.addEventListener('resize', () => {
+        if (!isRunning) init();
+      });
+
+      init();
+    </script>
+  </body>
+</html>
