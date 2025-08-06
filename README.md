@@ -1,4 +1,4 @@
-# 🧬 Ecosystem Battle Simulation
+# 🧬 Ecosystem and Battle Simulation
 
 A fully customizable **2D battle simulator** where two circles — Blue and Red — engage in a visual, interactive combat using uploaded assets like bodies, weapons, and ability icons. Inspired by game physics and real-time mechanics.
 
